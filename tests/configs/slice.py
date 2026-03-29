@@ -482,6 +482,16 @@ def make_slice_op_configs():
                 name="scatter_apply_mul2",
                 grad_xfail="scatter_apply JVP not implemented",
             ),
+            # Scatter-add with insertedWindowDims (FDTDX pattern):
+            # E.at[axis, *slice].add(value) where axis selects one component
+            # of a 4D field array. The scatter has non-empty insertedWindowDims
+            # because the leading axis index is absorbed.
+            OperationTestConfig(
+                lambda x, v: x.at[1, 2:5, 1:4, 0:3].add(v),
+                lambda key: random.normal(key, (3, 6, 6, 6)),
+                lambda key: random.normal(key, (3, 3, 3)),
+                name="scatter_add_inserted_window_dims",
+            ),
             # Scatter-add with non-contiguous update_window_dims.
             # Gradient of x[:, idx] where idx is a dynamic index array
             # produces a scatter with update_window_dims=[0,2,...] (gap at
