@@ -456,19 +456,27 @@ bool HandleScatter(mlir::Operation* op, ValueMap& values, std::vector<mlx::core:
                         result = mlx::core::slice_update(result, updateVal, startArr, axes);
                         break;
                     case ScatterType::Add: {
-                        if (!insertedWindowDims.empty() ||
-                            static_cast<int>(updateVal.ndim()) != operand->ndim()) {
+                        // Expand updateVal to match operand rank if insertedWindowDims squeezed dims
+                        auto addVal = updateVal;
+                        if (static_cast<int>(addVal.ndim()) != operand->ndim()) {
+                            // Re-insert squeezed window dims as size-1 axes
+                            for (int dim : insertedWindowDims) {
+                                addVal = mlx::core::expand_dims(addVal, dim);
+                            }
+                        }
+                        if (static_cast<int>(addVal.ndim()) != operand->ndim()) {
                             MPS_LOG_ERROR(
-                                "stablehlo.scatter: multi-dim window scatter Add requires "
-                                "empty insertedWindowDims and operand-rank updates\n");
+                                "stablehlo.scatter: scatter Add rank mismatch after "
+                                "expanding insertedWindowDims: update=%d operand=%d\n",
+                                addVal.ndim(), operand->ndim());
                             return false;
                         }
                         mlx::core::Shape sliceSizes(operand->shape());
                         for (int axis : axes) {
-                            sliceSizes[axis] = updateVal.shape(axis);
+                            sliceSizes[axis] = addVal.shape(axis);
                         }
                         auto current = mlx::core::slice(result, startArr, axes, sliceSizes);
-                        result = mlx::core::slice_update(result, mlx::core::add(current, updateVal),
+                        result = mlx::core::slice_update(result, mlx::core::add(current, addVal),
                                                          startArr, axes);
                         break;
                     }
